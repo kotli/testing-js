@@ -24,7 +24,8 @@ function combinePackageNameVersion(fPackName , fPackvalue) {
 function checkVersionOverlap(ver1, ver2){
 	// console.log('ver1: ' + ver1 + ' ver2 '+ ver2);
 	// console.log(semver.intersects(semver.toComparators(ver1)[0].join('||') , semver.toComparators(ver2)[0].join('||')));
-	return semver.intersects(semver.toComparators(ver1)[0].join('||') , semver.toComparators(ver2)[0].join('||'));
+	
+	return ver1.some(function(x) { return semver.intersects(semver.toComparators(x)[0].join('||') , semver.toComparators(ver2)[0].join('||')); });
 }
 
 
@@ -66,15 +67,16 @@ var getPackageDependencies = async ()=>{
         for(let entry in dependencies.dep){
         	packageNameValue =combinePackageNameVersion(entry , dependencies.dep[entry] );
             if(!dependencyMap.has(entry) ||
-            	dependencyMap.has(entry) && !checkVersionOverlap(dependencyMap.get(entry).version,dependencies.dep[entry])){
-                dependencyMap.set(entry, {id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]});
+            	dependencyMap.has(entry) && !checkVersionOverlap(dependencyMap.get(entry).versions,dependencies.dep[entry])){
+                dependencyMap.set(entry, {id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]});
                 fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
                 uiqueIndex++;
             }
-            //  else if(dependencyMap.has(entry) && checkVersionOverlap(dependencyMap.get(entry).version,dependencies.dep[entry])){
-            // 	// add existing dependencyMap but with diff parentid?
-            // 	dependencyMap.set(entry, {id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]});
-            // }
+             else if(dependencyMap.has(entry) && checkVersionOverlap(dependencyMap.get(entry).versions,dependencies.dep[entry])){
+            	// add existing dependencyMap but with diff parentid?
+            	let mapVal =dependencyMap.get(entry)
+            	dependencyMap.set(entry, {id:mapVal.id,parentid:dependencies.parentId ,package:mapVal.package, versions:mapVal.versions});
+            }
         }
     }
 }
@@ -82,7 +84,7 @@ var getPackageDependencies = async ()=>{
 async function asyncCall (packName, packVer){
 	let packageNameValue=combinePackageNameVersion(packName,packVer);
     fifo.push(buildNodeObj(packageNameValue , packName ,packVer , uiqueIndex ,0));
-    dependencyMap.set(packName, {id:uiqueIndex,parentid:0,package:packName,version:packVer});
+    dependencyMap.set(packName, {id:uiqueIndex,parentid:0,package:packName,versions:[packVer]});
     uiqueIndex++;
     await getPackageDependencies();
     console.log(Array.from(dependencyMap.values()));
