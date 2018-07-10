@@ -22,8 +22,9 @@ function combinePackageNameVersion(fPackName , fPackvalue) {
 } 
 
 function checkVersionOverlap(ver1, ver2){
-	console.log('ver1: ' + ver1 + ' ver2 '+ ver2);
-	return semver.satisfies(ver1,ver2);
+	// console.log('ver1: ' + ver1 + ' ver2 '+ ver2);
+	// console.log(semver.intersects(semver.toComparators(ver1)[0].join('||') , semver.toComparators(ver2)[0].join('||')));
+	return semver.intersects(semver.toComparators(ver1)[0].join('||') , semver.toComparators(ver2)[0].join('||'));
 }
 
 
@@ -70,8 +71,9 @@ var getPackageDependencies = async ()=>{
                 fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
                 uiqueIndex++;
             }
-            // else if(){
+            //  else if(dependencyMap.has(entry) && checkVersionOverlap(dependencyMap.get(entry).version,dependencies.dep[entry])){
             // 	// add existing dependencyMap but with diff parentid?
+            // 	dependencyMap.set(entry, {id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]});
             // }
         }
     }
@@ -121,18 +123,28 @@ function replacer(key, value) {
 }
 
 
-// asyncCall('express','latest');
+asyncCall('express','latest');
 
 // asyncCall('async','2.0.1');
 
 // console.log(semver.clean('>= 1.3.1 < 2'));
 // console.log(semver.coerce('~1.3.1'));
-// console.log(semver.toComparators('~1.3.1'));
+// if(!semver.valid('~1.3.1')){
+// 	console.log('wwwwwwwwwwww');
+// }
+// console.log(semver.toComparators('~1.3.1')[0].join('||'));
+// console.log(semver.toComparators('1.3.1')[0].join('||'));
+// console.log(semver.toComparators('~1.3.1')[0].join('||') + '||' + semver.toComparators('1.3.1')[0].join('||'));
+// console.log(semver.intersects(semver.toComparators('~1.3.1')[0].join('||') , semver.toComparators('1.3.1')[0].join('||')));
+// console.log(semver.intersects());
+// console.log(semver.valid('~1.3.1'));
 // console.log(semver.toComparators('1.3.1'));
 // console.log(semver.toComparators('~1.3.1')[0].concat(semver.toComparators('1.3.1')[0]));
 // console.log(semver.coerce('1.3.1'));
-console.log(semver.toComparators('~1.3.1')[0]);
-console.log(semver.satisfies('1.3.1',semver.toComparators('~1.3.1')[0]));
+// console.log(semver.toComparators('~1.3.1')[0]);
+// console.log(semver.satisfies('1.3.1',semver.toComparators('~1.3.1')));
+
+// console.log(semver.satisfies('1.3.1',semver.toComparators('~1.3.1')[0].join('||')));
 
 // console.log(semver.valid('~1.3.1'));
 // console.log(semver.coerce('~1.3.1').raw);
