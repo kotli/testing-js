@@ -3,111 +3,104 @@ var express = require('express'),
   port = process.env.PORT || 3000;
 
 app.listen(port);
+
 const semver = require('semver');
 var fifo = require('fifo')();
 var treeify = require('treeify');
+var axios=require('axios');
 
 var promises = [];
 var uiqueIndex=1;
-// var fifo = [];
+var dependencyMap = new Map();
 
 console.log('todo list RESTful API server started on: ' + port);
 
-var dependencyMap = new Map();
+function MapValue(id, parentid, package, version) {
+	this.id = id;
+    this.parentid = parentid;
+    this.package = package;
+    this.version = version;
+}
 
-var axios=require('axios');
+function NodeObj(key, name,version,id,parentid){
+	this.key=key;
+	this.name=name;
+	this.version=version;
+	this.id=id;
+	this.parentid=parentid;
+}
+
+function DependenciesObj(dep, parentId){
+	this.dep=dep;
+	this.parentId=parentId;
+}
 
 function combinePackageNameVersion(fPackName , fPackvalue) {
-	return fPackName + ' ' + stripVersionPrefix(fPackvalue);
+	return fPackName + ' ' + resolveVersion(fPackvalue);
 } 
 
 function checkVersionOverlap(ver1, ver2){
-	// console.log('ver1: ' + ver1 + ' ver2 '+ ver2);
-	// console.log(semver.intersects(semver.toComparators(ver1)[0].join('||') , semver.toComparators(ver2)[0].join('||')));
 	let verCom = semver.toComparators(ver2)[0].join('||');
 	ver1.forEach(function(element) {
-		// console.log('element: ' + element);
-		// console.log('element.versions: ' + element.versions);
-		// console.log('ver2: ' + ver2);
   		if(([element.version]).some(function(x) { return semver.intersects(semver.toComparators(x)[0].join('||') , verCom); }))
   		return true;
 	});
 	return false;
 }
 
-
-function stripVersionPrefix(fPackvalue){
+function resolveVersion(fPackvalue){
 	let newStr=fPackvalue;
-	// console.log('inside stripVersionPrefix fPackName:' + fPackName + ' fPackvalue: ' + fPackvalue);
-	// console.log(fPackvalue);
 	if(!semver.valid(fPackvalue) && fPackvalue != 'latest'){
 		newStr=semver.coerce(fPackvalue).raw;
 	}
 	return newStr;
 }
 
-function buildNodeObj(nameVer, packName,packVer,idx,pId){
-	console.log('{key:'+nameVer+' , name:'+packName+' , version:'+packVer+' , id:'+idx+' , parentid:'+pId+'}');
-	return {key:nameVer , name:packName , version:stripVersionPrefix(packVer) , id:idx , parentid:pId};
-}
-
-var getFromURL = async ()=>{
-    // packageName = 'async';
+async function getFromURL(){
     let queue = fifo.pop();
-
 
     let url = 'https://registry.npmjs.org/' + queue.name + '/'+ queue.version;
     var ans;
-    // console.log('url : ' + url);
     await axios.get(url).then((response)=>{
         ans = response.data.dependencies;
     })
-    return {dep:ans,parentId:queue.id};
+    return new DependenciesObj(ans,queue.id);
 }
 
-
-
-var getPackageDependencies = async ()=>{
+async function getPackageDependencies(){
 	let packageNameValue;
 	let mapVal;
 	let isOverlapedVersions;
+	let resolvedVersion;
     while(fifo.length > 0){
         var dependencies =  await getFromURL();
         for(let entry in dependencies.dep){
-        	packageNameValue =combinePackageNameVersion(entry , dependencies.dep[entry] );
+        	packageNameValue= combinePackageNameVersion(entry , dependencies.dep[entry] );
+           	resolvedVersion= resolveVersion(dependencies.dep[entry]);
             if(!dependencyMap.has(entry) ){
-            	// console.log('if uiqueIndex: ' + uiqueIndex);
-                dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]}]);
-                fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
+                dependencyMap.set(entry, [new MapValue(uiqueIndex,dependencies.parentId ,entry,dependencies.dep[entry])]) ;
+                fifo.push(new NodeObj(packageNameValue,entry,resolvedVersion,uiqueIndex,dependencies.parentId));
                 uiqueIndex++;
             }else if (dependencyMap.has(entry) && !checkVersionOverlap(dependencyMap.get(entry),dependencies.dep[entry])){
-            	// dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:[dependencies.dep[entry]]}]);
-            	mapVal =dependencyMap.get(entry);
-            	let newArr = mapVal.concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]}]);
-            	dependencyMap.set(entry, newArr);
-                fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
+            	mapVal= dependencyMap.get(entry);
+            	dependencyMap.set(entry, mapVal.concat([new MapValue(uiqueIndex,dependencies.parentId ,entry, dependencies.dep[entry])]));
+                fifo.push(new NodeObj(packageNameValue,entry,resolvedVersion,uiqueIndex,dependencies.parentId));
                 uiqueIndex++;
             }else if(dependencyMap.has(entry) && checkVersionOverlap(dependencyMap.get(entry),dependencies.dep[entry])){
-
-            	// add existing dependencyMap but with diff parentid?
-            	// console.log('if else: ' + uiqueIndex);
-            	mapVal =dependencyMap.get(entry);
-            	// console.log('id: ' +mapVal.id + ' parentId: ' + dependencies.parentId);
-            	dependencyMap.set(entry, dependencyMap.get(entry).concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]}]));
-            }else{
-            	console.log('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$');
+            	mapVal= dependencyMap.get(entry);
+            	dependencyMap.set(entry, mapVal.concat([new MapValue(uiqueIndex,dependencies.parentId ,entry, dependencies.dep[entry])]));
             }
         }
     }
 }
 
-async function asyncCall (packName, packVer){
+async function npmRegistry (packName, packVer){
 	let packageNameValue=combinePackageNameVersion(packName,packVer);
-    fifo.push(buildNodeObj(packageNameValue , packName ,packVer , uiqueIndex ,0));
-    dependencyMap.set(packName, [{id:uiqueIndex,parentid:0,package:packName,version:packVer}]);
+	let resolvedVersion =resolveVersion(packVer);
+    fifo.push(new NodeObj(packageNameValue , packName ,resolvedVersion , uiqueIndex ,0));
+    dependencyMap.set(packName, [new MapValue(uiqueIndex,0,packName,packVer)]);
     uiqueIndex++;
     await getPackageDependencies();
-    // [].concat(...Array.from(dependencyMap.values()));
     var printMap = [].concat(...Array.from(dependencyMap.values()));
     console.log(printMap);
     tree = unflatten( printMap);
@@ -116,11 +109,10 @@ async function asyncCall (packName, packVer){
 	console.log(treeify.asTree(JSON.parse(JSON.stringify(tree, replacer," ")), true));
 	// console.log(treeify.asTree(tree,true));
 
-	console.log('DOOOOOOOOOOOOOOOOOOOOOOOOOOONE');
+	console.log('DONE');
 }
 
-var unflatten = function( array, parent, tree ){
-
+function unflatten(array, parent, tree ){
     tree = typeof tree !== 'undefined' ? tree : [];
     parent = typeof parent !== 'undefined' ? parent : { id: 0 };
 	
@@ -134,7 +126,6 @@ var unflatten = function( array, parent, tree ){
         }
         children.forEach(function( child ){ unflatten( array, child ) } );                    
     }
-
     return tree;
 }
 
@@ -147,38 +138,6 @@ function replacer(key, value) {
 }
 
 
-asyncCall('express','latest');
+npmRegistry('express','latest');
 
-// dependencyMap.set({key:'shalom' , val:1},'val1');
-// dependencyMap.set({key:'shalom' , val:2},'val2');
-// console.log(dependencyMap);
-
-// dependencyMap.set({key:'shalom' , val:1},'val1');
-// console.log(dependencyMap);
-
-// asyncCall('async','2.0.1');
-
-// console.log(semver.clean('>= 1.3.1 < 2'));
-// console.log(semver.coerce('~1.3.1'));
-// if(!semver.valid('~1.3.1')){
-// 	console.log('wwwwwwwwwwww');
-// }
-// console.log(semver.toComparators('~1.3.1')[0].join('||'));
-// console.log(semver.toComparators('1.3.1')[0].join('||'));
-// console.log(semver.toComparators('~1.3.1')[0].join('||') + '||' + semver.toComparators('1.3.1')[0].join('||'));
-// console.log(semver.intersects(semver.toComparators('~1.3.1')[0].join('||') , semver.toComparators('1.3.1')[0].join('||')));
-// console.log(semver.intersects());
-// console.log(semver.valid('~1.3.1'));
-// console.log(semver.toComparators('1.3.1'));
-// console.log(semver.toComparators('~1.3.1')[0].concat(semver.toComparators('1.3.1')[0]));
-// console.log(semver.coerce('1.3.1'));
-// console.log(semver.toComparators('~1.3.1')[0]);
-// console.log(semver.satisfies('1.3.1',semver.toComparators('~1.3.1')));
-
-// console.log(semver.satisfies('1.3.1',semver.toComparators('~1.3.1')[0].join('||')));
-
-// console.log(semver.valid('~1.3.1'));
-// console.log(semver.coerce('~1.3.1').raw);
-// console.log(semver.coerce('^1.3.1'));
-// console.log(semver.coerce('>= 1.3.1 < 2').raw);
-// adding depth var as parent id
+// npmRegistry('async','2.0.1');
