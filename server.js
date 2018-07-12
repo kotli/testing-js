@@ -29,7 +29,7 @@ function checkVersionOverlap(ver1, ver2){
 		// console.log('element: ' + element);
 		// console.log('element.versions: ' + element.versions);
 		// console.log('ver2: ' + ver2);
-  		if((element.versions).some(function(x) { return semver.intersects(semver.toComparators(x)[0].join('||') , verCom); }))
+  		if(([element.version]).some(function(x) { return semver.intersects(semver.toComparators(x)[0].join('||') , verCom); }))
   		return true;
 	});
 	return false;
@@ -77,13 +77,13 @@ var getPackageDependencies = async ()=>{
         	packageNameValue =combinePackageNameVersion(entry , dependencies.dep[entry] );
             if(!dependencyMap.has(entry) ){
             	// console.log('if uiqueIndex: ' + uiqueIndex);
-                dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]);
+                dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]}]);
                 fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
                 uiqueIndex++;
             }else if (dependencyMap.has(entry) && !checkVersionOverlap(dependencyMap.get(entry),dependencies.dep[entry])){
-            	// dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]);
+            	// dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:[dependencies.dep[entry]]}]);
             	mapVal =dependencyMap.get(entry);
-            	let newArr = mapVal.concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]);
+            	let newArr = mapVal.concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]}]);
             	dependencyMap.set(entry, newArr);
                 fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
                 uiqueIndex++;
@@ -93,7 +93,7 @@ var getPackageDependencies = async ()=>{
             	// console.log('if else: ' + uiqueIndex);
             	mapVal =dependencyMap.get(entry);
             	// console.log('id: ' +mapVal.id + ' parentId: ' + dependencies.parentId);
-            	dependencyMap.set(entry, dependencyMap.get(entry).concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]));
+            	dependencyMap.set(entry, dependencyMap.get(entry).concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, version:dependencies.dep[entry]}]));
             }else{
             	console.log('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$');
             }
@@ -104,11 +104,13 @@ var getPackageDependencies = async ()=>{
 async function asyncCall (packName, packVer){
 	let packageNameValue=combinePackageNameVersion(packName,packVer);
     fifo.push(buildNodeObj(packageNameValue , packName ,packVer , uiqueIndex ,0));
-    dependencyMap.set(packName, [{id:uiqueIndex,parentid:0,package:packName,versions:[packVer]}]);
+    dependencyMap.set(packName, [{id:uiqueIndex,parentid:0,package:packName,version:packVer}]);
     uiqueIndex++;
     await getPackageDependencies();
-    console.log(Array.from(dependencyMap.values()));
-    tree = unflatten( Array.from(dependencyMap.values()));
+    // [].concat(...Array.from(dependencyMap.values()));
+    var printMap = [].concat(...Array.from(dependencyMap.values()));
+    console.log(printMap);
+    tree = unflatten( printMap);
 	// console.log(JSON.stringify(tree, replacer," ")); 
 		
 	console.log(treeify.asTree(JSON.parse(JSON.stringify(tree, replacer," ")), true));
