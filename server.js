@@ -24,8 +24,15 @@ function combinePackageNameVersion(fPackName , fPackvalue) {
 function checkVersionOverlap(ver1, ver2){
 	// console.log('ver1: ' + ver1 + ' ver2 '+ ver2);
 	// console.log(semver.intersects(semver.toComparators(ver1)[0].join('||') , semver.toComparators(ver2)[0].join('||')));
-	
-	return ver1.some(function(x) { return semver.intersects(semver.toComparators(x)[0].join('||') , semver.toComparators(ver2)[0].join('||')); });
+	let verCom = semver.toComparators(ver2)[0].join('||');
+	ver1.forEach(function(element) {
+		// console.log('element: ' + element);
+		// console.log('element.versions: ' + element.versions);
+		// console.log('ver2: ' + ver2);
+  		if((element.versions).some(function(x) { return semver.intersects(semver.toComparators(x)[0].join('||') , verCom); }))
+  		return true;
+	});
+	return false;
 }
 
 
@@ -62,20 +69,33 @@ var getFromURL = async ()=>{
 
 var getPackageDependencies = async ()=>{
 	let packageNameValue;
+	let mapVal;
+	let isOverlapedVersions;
     while(fifo.length > 0){
         var dependencies =  await getFromURL();
         for(let entry in dependencies.dep){
         	packageNameValue =combinePackageNameVersion(entry , dependencies.dep[entry] );
-            if(!dependencyMap.has(entry) ||
-            	dependencyMap.has(entry) && !checkVersionOverlap(dependencyMap.get(entry).versions,dependencies.dep[entry])){
-                dependencyMap.set(entry, {id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]});
+            if(!dependencyMap.has(entry) ){
+            	// console.log('if uiqueIndex: ' + uiqueIndex);
+                dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]);
                 fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
                 uiqueIndex++;
-            }
-             else if(dependencyMap.has(entry) && checkVersionOverlap(dependencyMap.get(entry).versions,dependencies.dep[entry])){
+            }else if (dependencyMap.has(entry) && !checkVersionOverlap(dependencyMap.get(entry),dependencies.dep[entry])){
+            	// dependencyMap.set(entry, [{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]);
+            	mapVal =dependencyMap.get(entry);
+            	let newArr = mapVal.concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]);
+            	dependencyMap.set(entry, newArr);
+                fifo.push(buildNodeObj(packageNameValue,entry,dependencies.dep[entry],uiqueIndex,dependencies.parentId));
+                uiqueIndex++;
+            }else if(dependencyMap.has(entry) && checkVersionOverlap(dependencyMap.get(entry),dependencies.dep[entry])){
+
             	// add existing dependencyMap but with diff parentid?
-            	let mapVal =dependencyMap.get(entry)
-            	dependencyMap.set(entry, {id:mapVal.id,parentid:dependencies.parentId ,package:mapVal.package, versions:mapVal.versions});
+            	// console.log('if else: ' + uiqueIndex);
+            	mapVal =dependencyMap.get(entry);
+            	// console.log('id: ' +mapVal.id + ' parentId: ' + dependencies.parentId);
+            	dependencyMap.set(entry, dependencyMap.get(entry).concat([{id:uiqueIndex,parentid:dependencies.parentId ,package:entry, versions:[dependencies.dep[entry]]}]));
+            }else{
+            	console.log('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$');
             }
         }
     }
@@ -84,12 +104,12 @@ var getPackageDependencies = async ()=>{
 async function asyncCall (packName, packVer){
 	let packageNameValue=combinePackageNameVersion(packName,packVer);
     fifo.push(buildNodeObj(packageNameValue , packName ,packVer , uiqueIndex ,0));
-    dependencyMap.set(packName, {id:uiqueIndex,parentid:0,package:packName,versions:[packVer]});
+    dependencyMap.set(packName, [{id:uiqueIndex,parentid:0,package:packName,versions:[packVer]}]);
     uiqueIndex++;
     await getPackageDependencies();
     console.log(Array.from(dependencyMap.values()));
     tree = unflatten( Array.from(dependencyMap.values()));
-	//console.log(JSON.stringify(tree, replacer," ")); 
+	// console.log(JSON.stringify(tree, replacer," ")); 
 		
 	console.log(treeify.asTree(JSON.parse(JSON.stringify(tree, replacer," ")), true));
 	// console.log(treeify.asTree(tree,true));
@@ -101,9 +121,9 @@ var unflatten = function( array, parent, tree ){
 
     tree = typeof tree !== 'undefined' ? tree : [];
     parent = typeof parent !== 'undefined' ? parent : { id: 0 };
-
-    var children = array.filter(function(child){ return child.parentid == parent.id; });
-
+	
+	var children = array.filter(function(child){ return child.parentid == parent.id; });
+	
     if( children.length ){
         if( parent.id == 0 ){
            tree = children;   
@@ -126,6 +146,13 @@ function replacer(key, value) {
 
 
 asyncCall('express','latest');
+
+// dependencyMap.set({key:'shalom' , val:1},'val1');
+// dependencyMap.set({key:'shalom' , val:2},'val2');
+// console.log(dependencyMap);
+
+// dependencyMap.set({key:'shalom' , val:1},'val1');
+// console.log(dependencyMap);
 
 // asyncCall('async','2.0.1');
 
